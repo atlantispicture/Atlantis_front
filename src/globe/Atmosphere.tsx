@@ -2,19 +2,22 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 
 /**
- * 지구 대기 글로우. 바깥을 향한 뒷면(BackSide) 구에 프레넬 셰이더 +
- * additive 블렌딩으로 가장자리가 파랗게 빛나는 효과.
+ * 지구 가장자리 링. 바깥을 향한 뒷면(BackSide) 구에 프레넬 셰이더로
+ * 옅은 회색 테두리를 얹어 흰 배경 위에서 구의 윤곽을 잡아준다.
+ *
+ * 밝은 테마에선 additive 블렌딩이 무의미하므로(흰 배경 + 흰빛 = 그대로 흰색)
+ * 일반 블렌딩 + 알파로 그린다.
  */
-export default function Atmosphere({ radius = 1.15 }: { radius?: number }) {
+export default function Atmosphere({ radius = 1.13 }: { radius?: number }) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
         transparent: true,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
         side: THREE.BackSide,
         depthWrite: false,
         uniforms: {
-          uColor: { value: new THREE.Color('#3b82f6') },
+          uColor: { value: new THREE.Color('#8b9096') }, // 옅은 회색 윤곽
         },
         vertexShader: /* glsl */ `
           varying vec3 vNormal;
@@ -27,8 +30,9 @@ export default function Atmosphere({ radius = 1.15 }: { radius?: number }) {
           uniform vec3 uColor;
           varying vec3 vNormal;
           void main() {
-            float intensity = pow(0.72 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
-            gl_FragColor = vec4(uColor, 1.0) * intensity;
+            // 가장자리로 갈수록 1에 가까워지는 프레넬 항
+            float rim = pow(0.72 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
+            gl_FragColor = vec4(uColor, clamp(rim, 0.0, 1.0) * 0.45);
           }
         `,
       }),

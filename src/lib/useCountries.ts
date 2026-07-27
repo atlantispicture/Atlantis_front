@@ -12,6 +12,8 @@ export interface CountryMeta {
   code: CountryCode
   name: string // 한국어 우선
   nameEn: string // 검색 보조용 영문
+  /** Natural Earth CONTINENT 원본 값 (예: "Asia") — 대륙 드롭다운용 */
+  continent: string
   centroid: [number, number] // [lng, lat]
   feature: CountryFeature
 }
@@ -82,6 +84,7 @@ async function load(): Promise<CountriesData> {
       code,
       name: pickString(feature.properties, ['NAME_KO', 'ADMIN', 'NAME'], '알 수 없음'),
       nameEn: pickString(feature.properties, ['NAME_EN', 'ADMIN', 'NAME'], code),
+      continent: pickString(feature.properties, ['CONTINENT'], '기타'),
       centroid,
       feature,
     }

@@ -50,6 +50,32 @@ export function buildCountryGeometry(
   return geo
 }
 
+/**
+ * 폴리곤 외곽선 → LineSegments 용 BufferGeometry (구면에 밀착).
+ * 채색 메시 위에 얹어 지역 경계를 눈에 보이게 한다.
+ */
+export function buildOutlineGeometry(
+  polygons: PolygonCoords[],
+  radius = 1.006,
+): THREE.BufferGeometry {
+  const positions: number[] = []
+  const v = new THREE.Vector3()
+
+  for (const poly of polygons) {
+    for (const ring of poly) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        // 선분 하나당 정점 2개 (LineSegments 규약)
+        push(positions, v, radius, ring[i][0], ring[i][1])
+        push(positions, v, radius, ring[i + 1][0], ring[i + 1][1])
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  return geo
+}
+
 /** GeoJSON ring 배열 → earcut 입력 형태 (flat vertices + hole 인덱스) */
 function flatten(poly: PolygonCoords): { vertices: number[]; holes: number[] } {
   const vertices: number[] = []

@@ -1,6 +1,9 @@
 /** ISO 3166-1 alpha-3 국가 코드 (예: "KOR", "JPN") */
 export type CountryCode = string
 
+/** ISO 3166-2 행정구역 코드 (예: "JP-27" 오사카부, "KR-11" 서울) — 전역 고유 */
+export type RegionCode = string
+
 export type PrivacyScope = 'public' | 'friends' | 'private'
 
 export interface Country {
@@ -17,6 +20,17 @@ export interface Visit {
   companions?: string
   note?: string
   color?: string
+  scope: PrivacyScope
+  updatedAt: number
+}
+
+/** 지역(행정구역) 단위 방문 기록 — 나라 방문(Visit)보다 한 단계 아래. */
+export interface RegionVisit {
+  regionCode: RegionCode
+  countryCode: CountryCode
+  visited: boolean
+  visitedYm?: string // 'YYYY-MM'
+  note?: string
   scope: PrivacyScope
   updatedAt: number
 }

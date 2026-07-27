@@ -1,5 +1,6 @@
 import { geoAzimuthalEquidistant, geoPath } from 'd3-geo'
 import { useMemo } from 'react'
+import MemoryPanel from '@/components/MemoryPanel'
 import { useCountries } from '@/lib/useCountries'
 import { useVisitStore } from '@/store/useVisitStore'
 
@@ -13,9 +14,16 @@ const H = 240
 export default function CountryMap() {
   const phase = useVisitStore((s) => s.phase)
   const selected = useVisitStore((s) => s.selected)
+  const selectedRegion = useVisitStore((s) => s.selectedRegion)
   const back = useVisitStore((s) => s.back)
   const isVisited = useVisitStore((s) => (selected ? !!s.visits[selected.code]?.visited : false))
   const toggleVisited = useVisitStore((s) => s.toggleVisited)
+  const regionVisited = useVisitStore((s) =>
+    selectedRegion ? !!s.regionVisits[selectedRegion.code]?.visited : false,
+  )
+  const toggleRegionVisited = useVisitStore((s) => s.toggleRegionVisited)
+  const regionCount = useVisitStore((s) => (selected ? s.regionVisitedCount(selected.code) : 0))
+  const selectRegion = useVisitStore((s) => s.selectRegion)
 
   const { byCode, features } = useCountries()
 
@@ -53,39 +61,62 @@ export default function CountryMap() {
             <div className="sheet__title">
               <h2>{selected.name}</h2>
               <span className="sheet__code">{selected.code}</span>
+              {regionCount > 0 && <span className="sheet__badge">지역 {regionCount}</span>}
             </div>
+
+            {/* 지역이 선택되면 한 단계 아래를 표시 — 다시 누르면 나라 전체로 */}
+            {selectedRegion && (
+              <button
+                className="sheet__region"
+                onClick={() => selectRegion(null)}
+                title="나라 전체 보기"
+              >
+                <span className="sheet__region-name">{selectedRegion.name}</span>
+                <span className="sheet__region-kind">
+                  {selectedRegion.kind === 'city' ? '도시' : '행정구역'}
+                </span>
+                <span className="sheet__region-clear">✕</span>
+              </button>
+            )}
           </header>
 
           <div className="sheet__map">
             <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%">
-              <rect width={W} height={H} fill="#0b1220" rx={12} />
+              <rect width={W} height={H} fill="#f4f4f6" rx={12} />
               {paths?.context.map((d, i) => (
-                <path key={i} d={d} fill="#1e293b" stroke="#0b1220" strokeWidth={0.4} />
+                <path key={i} d={d} fill="#c9c9cf" stroke="#f4f4f6" strokeWidth={0.4} />
               ))}
               {paths && (
                 <path
                   d={paths.selected}
-                  fill={isVisited ? '#f6ad55' : '#38a169'}
-                  stroke="#f8fafc"
+                  fill={isVisited ? '#0d0d0f' : '#4a4d52'}
+                  stroke="#ffffff"
                   strokeWidth={0.8}
                 />
               )}
             </svg>
           </div>
 
-          <button
-            className={`toggle ${isVisited ? 'toggle--on' : ''}`}
-            onClick={() => toggleVisited(selected.code)}
-          >
-            {isVisited ? '✓ 가봤어요' : '가봤어요 표시하기'}
-          </button>
+          {/* 지역이 선택돼 있으면 지역을, 아니면 나라를 토글한다 */}
+          {selectedRegion ? (
+            <button
+              className={`toggle ${regionVisited ? 'toggle--on' : ''}`}
+              onClick={() => toggleRegionVisited(selectedRegion)}
+            >
+              {regionVisited
+                ? `✓ ${selectedRegion.name} 가봤어요`
+                : `${selectedRegion.name} 가봤어요 표시하기`}
+            </button>
+          ) : (
+            <button
+              className={`toggle ${isVisited ? 'toggle--on' : ''}`}
+              onClick={() => toggleVisited(selected.code)}
+            >
+              {isVisited ? '✓ 가봤어요' : '가봤어요 표시하기'}
+            </button>
+          )}
 
-          <section className="sheet__memories">
-            <h3>추억</h3>
-            <p className="sheet__empty">
-              사진·메모·날짜를 붙일 수 있어요. (Phase 3에서 구현)
-            </p>
-          </section>
+          <MemoryPanel />
         </>
       )}
     </aside>

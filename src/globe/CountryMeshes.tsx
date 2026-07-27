@@ -1,9 +1,9 @@
 import { geoBounds } from 'd3-geo'
-import { useMemo, useState, type MutableRefObject } from 'react'
-import type { ThreeEvent } from '@react-three/fiber'
+import { useMemo } from 'react'
 import * as THREE from 'three'
 import { buildCountryGeometry, toPolygons } from '@/lib/countryMesh'
 import type { CountryMeta } from '@/lib/useCountries'
+import { useMemoryStore } from '@/store/useMemoryStore'
 import { useVisitStore } from '@/store/useVisitStore'
 
 const COUNTRY_RADIUS = 1.004
@@ -18,26 +18,47 @@ function subdivFor(feature: CountryMeta['feature']): number {
   return 1
 }
 
-const COLOR_LAND = new THREE.Color('#2f855a') // 미방문 육지 (초록)
-const COLOR_VISITED = new THREE.Color('#f6ad55') // 방문 (따뜻한 포인트)
-const COLOR_HOVER = new THREE.Color('#68d391') // 호버 강조
-const COLOR_SELECTED = new THREE.Color('#f6e05e') // 선택 강조
+// 화이트 모노크롬: 흰 배경 위 검은 대륙.
+// 밝은 테마에선 '어두울수록 강조' — 방문한 나라가 가장 진하게 남는다.
+const COLOR_LAND = new THREE.Color('#4a4d52') // 미방문 육지 (짙은 회색)
+const COLOR_VISITED = new THREE.Color('#0d0d0f') // 방문 (거의 검정 — 수집됨)
+const COLOR_HOVER = new THREE.Color('#2c2e32') // 호버 강조 (한 단계 진하게)
+const COLOR_SELECTED = new THREE.Color('#000000') // 선택 강조 (순검정)
 
 interface Props {
   countries: CountryMeta[]
-  /** 드래그 중 클릭 무시용 — 부모(드래그 핸들러)가 갱신 */
-  draggingRef: MutableRefObject<boolean>
-  onPick: (meta: CountryMeta) => void
+  /** 호버 중인 나라 코드 — 픽킹은 GlobeScene 바다 구가 전담(geoContains)해서 내려준다. */
+  hoveredCode: string | null
+  /**
+   * 이 나라는 그리지 않는다. 지역 블록(admin-1, 10m)으로 대체된 나라용 —
+   * 국가 경계는 110m 저해상도라 그대로 두면 해안선이 어긋나 검은 테두리가 삐져나온다.
+   */
+  hiddenCode?: string | null
 }
+
+/** 채색 메시는 순수 렌더용 — 레이캐스트(픽킹) 대상에서 제외한다. */
+const IGNORE_RAYCAST = () => {}
 
 /**
  * 국가별 채색 메시. GeoJSON → BufferGeometry 는 최초 1회만 굽고,
  * 색상만 상태에 따라 바꾼다 (매 프레임 재계산 금지 — 기획서 §3.1).
  */
-export default function CountryMeshes({ countries, draggingRef, onPick }: Props) {
+export default function CountryMeshes({ countries, hoveredCode, hiddenCode }: Props) {
   const visits = useVisitStore((s) => s.visits)
   const selectedCode = useVisitStore((s) => s.selected?.code)
-  const [hovered, setHovered] = useState<string | null>(null)
+  // 나라에 직접 붙은 추억(지역 미지정)의 계절색
+  const memoryItems = useMemoryStore((s) => s.items)
+  const customColors = useMemoryStore((s) => s.customColors)
+  const colorOf = useMemoryStore((s) => s.colorOf)
+
+  const tinted = useMemo(() => {
+    const map = new Map<string, THREE.Color>()
+    for (const c of countries) {
+      const t = colorOf(c.code)
+      if (t) map.set(c.code, new THREE.Color(t.color))
+    }
+    return map
+  }, [countries, memoryItems, customColors, colorOf])
 
   // 지오메트리 캐시 (데이터가 바뀔 때만 재생성)
   const geometries = useMemo(() => {
@@ -54,36 +75,20 @@ export default function CountryMeshes({ countries, draggingRef, onPick }: Props)
   return (
     <group>
       {geometries.map(({ meta, geometry }) => {
+        if (meta.code === hiddenCode) return null // 지역 블록이 대신 그린다
+
         const isVisited = !!visits[meta.code]?.visited
         const isSelected = selectedCode === meta.code
-        const isHover = hovered === meta.code
+        const isHover = hoveredCode === meta.code
+        const tint = tinted.get(meta.code)
         const color = isSelected
           ? COLOR_SELECTED
           : isHover
             ? COLOR_HOVER
-            : isVisited
-              ? COLOR_VISITED
-              : COLOR_LAND
+            : (tint ?? (isVisited ? COLOR_VISITED : COLOR_LAND))
 
         return (
-          <mesh
-            key={meta.code}
-            geometry={geometry}
-            onClick={(e: ThreeEvent<MouseEvent>) => {
-              e.stopPropagation()
-              if (draggingRef.current) return // 드래그였으면 선택 안 함
-              onPick(meta)
-            }}
-            onPointerOver={(e) => {
-              e.stopPropagation()
-              setHovered(meta.code)
-              document.body.style.cursor = 'pointer'
-            }}
-            onPointerOut={() => {
-              setHovered((h) => (h === meta.code ? null : h))
-              document.body.style.cursor = 'auto'
-            }}
-          >
+          <mesh key={meta.code} geometry={geometry} raycast={IGNORE_RAYCAST}>
             <meshStandardMaterial
               color={color}
               roughness={0.85}

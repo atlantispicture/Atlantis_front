@@ -22,6 +22,21 @@ export function lngLatToUnit(lng: number, lat: number, out: THREE.Vector3): THRE
   return out.set(-s * Math.cos(theta), Math.cos(phi), s * Math.sin(theta))
 }
 
+const RAD2DEG = 180 / Math.PI
+
+/**
+ * lngLatToUnit 의 역변환: 구면 위 단위벡터(지구 로컬 프레임) → [lng, lat] (도).
+ * 커서 밑 지점을 위경도로 되돌려 어느 나라인지 판정할 때 쓴다.
+ */
+export function unitToLngLat(v: THREE.Vector3): [number, number] {
+  const y = THREE.MathUtils.clamp(v.y, -1, 1)
+  const lat = 90 - Math.acos(y) * RAD2DEG
+  let lng = Math.atan2(v.z, -v.x) * RAD2DEG - 180
+  if (lng < -180) lng += 360
+  if (lng > 180) lng -= 360
+  return [lng, lat]
+}
+
 /** 카메라가 이 나라를 정면(+Z, 카메라 쪽)으로 보게 만드는 회전 쿼터니언. */
 export function faceFrontQuaternion(centroidLng: number, centroidLat: number): THREE.Quaternion {
   const p = lngLatToVector3(centroidLng, centroidLat, 1).normalize()

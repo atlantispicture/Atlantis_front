@@ -1,5 +1,8 @@
 import { Canvas } from '@react-three/fiber'
 import { Suspense } from 'react'
+import Loader from './components/Loader'
+import Navigator from './components/Navigator'
+import Onboarding from './components/Onboarding'
 import SearchBox from './components/SearchBox'
 import GlobeScene from './globe/GlobeScene'
 import CountryMap from './map/CountryMap'
@@ -15,9 +18,10 @@ export default function App() {
     <div className="app-root">
       <Canvas camera={{ position: [0, 0, 3], fov: 45, near: 0.1, far: 100 }} gl={{ antialias: true }}>
         <Suspense fallback={null}>
-          <color attach="background" args={['#05060a']} />
-          <ambientLight intensity={0.75} />
-          <directionalLight position={[5, 3, 5]} intensity={1.1} />
+          <color attach="background" args={['#ffffff']} />
+          {/* 흰 배경 + 검은 대륙: 음영이 지면 지저분해져 거의 평면광으로 둔다 */}
+          <ambientLight intensity={1.6} />
+          <directionalLight position={[5, 3, 5]} intensity={0.25} />
           <GlobeScene countries={status === 'ready' ? list : []} />
         </Suspense>
       </Canvas>
@@ -25,6 +29,12 @@ export default function App() {
       <CountryMap />
 
       <SearchBox />
+
+      <Navigator />
+
+      <Loader />
+
+      <Onboarding />
 
       {/* 좌하단 HUD */}
       <div className="hud">
