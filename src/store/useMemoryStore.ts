@@ -24,7 +24,10 @@ interface MemoryState {
   customColors: Record<string, string>
 
   load: () => Promise<void>
-  add: (files: FileList | File[], target: { countryCode: string; regionCode: string | null }) => Promise<void>
+  add: (
+    files: FileList | File[],
+    target: { countryCode: string; regionCode: string | null; placeName: string },
+  ) => Promise<void>
   remove: (id: string) => Promise<void>
   setCustomColor: (key: string, color: string | null) => void
 
@@ -71,6 +74,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           regionCode: target.regionCode,
           countryCode: target.countryCode,
+          placeName: target.placeName,
           kind: isVideo ? 'video' : 'photo',
           mime: file.type,
           fileName: file.name,

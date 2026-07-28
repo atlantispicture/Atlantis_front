@@ -4,6 +4,7 @@ import { useCountries } from '@/lib/useCountries'
 import { useRegions } from '@/lib/useRegions'
 import { useVisitStore, type SelectedRegion } from '@/store/useVisitStore'
 import Combo, { type ComboOption } from './Combo'
+import SearchBox from './SearchBox'
 
 /** 도시는 ISO 코드가 없으므로 나라코드+이름으로 방문 기록용 안정 키를 만든다. */
 export const cityCode = (countryCode: string, cityName: string) =>
@@ -25,6 +26,8 @@ export default function Navigator() {
 
   // 대륙은 독립 상태 — 대륙만 고르고 나라는 아직 안 고른 단계가 있어야 한다.
   const [continent, setContinent] = useState<string | null>(null)
+  // 기본은 접힘 — 지구본을 가리지 않게
+  const [expanded, setExpanded] = useState(false)
 
   // 검색·지구본 클릭으로 나라가 정해지면 대륙 칸도 따라 맞춘다.
   useEffect(() => {
@@ -120,6 +123,9 @@ export default function Navigator() {
 
   if (status !== 'ready') return null
 
+  // 접힌 상태에서 무엇이 걸려 있는지 한눈에 (아이콘 옆 요약)
+  const summary = selectedRegion?.name ?? selected?.name ?? continentLabelOf(continent)
+
   // 현재 선택을 목록 위치로 되짚어 콤보 값과 맞춘다.
   const regionValue = !selectedRegion
     ? ''
@@ -127,42 +133,94 @@ export default function Navigator() {
       ? indexOrEmpty('region', regions.findIndex((r) => r.code === selectedRegion.code))
       : indexOrEmpty('city', cities.findIndex((c) => c.name === selectedRegion.name))
 
+  // 접힘: 작은 필터 아이콘 / 펼침: 대륙 › 나라 › 지역
+  if (!expanded) {
+    return (
+      <button
+        className={`navfab ${summary ? 'navfab--on' : ''}`}
+        onClick={() => setExpanded(true)}
+        aria-label="지역 필터 열기"
+        aria-expanded={false}
+      >
+        <FilterIcon />
+        {summary && <span className="navfab__label">{summary}</span>}
+      </button>
+    )
+  }
+
   return (
     <div className="nav">
-      <Combo
-        ariaLabel="대륙 선택"
-        placeholder="대륙"
-        value={continent ?? ''}
-        options={continentOptions}
-        onChange={onContinent}
-      />
+      {/* 1행: 접기 + 검색 — 검색도 '어디를 볼까'라는 같은 맥락이라 함께 둔다 */}
+      <div className="nav__row">
+        <button
+          className="nav__collapse"
+          onClick={() => setExpanded(false)}
+          aria-label="필터 접기"
+        >
+          <FilterIcon />
+        </button>
+        <SearchBox />
+      </div>
 
-      <span className="nav__sep">›</span>
+      {/* 2행: 대륙 › 나라 › 지역 */}
+      <div className="nav__row">
+        <Combo
+          ariaLabel="대륙 선택"
+          placeholder="대륙"
+          value={continent ?? ''}
+          options={continentOptions}
+          onChange={onContinent}
+        />
 
-      <Combo
-        ariaLabel="나라 선택"
-        placeholder="나라"
-        value={selected?.code ?? ''}
-        options={countryOptions}
-        onChange={onCountry}
-      />
+        <span className="nav__sep">›</span>
 
-      <span className="nav__sep">›</span>
+        <Combo
+          ariaLabel="나라 선택"
+          placeholder="나라"
+          value={selected?.code ?? ''}
+          options={countryOptions}
+          onChange={onCountry}
+        />
 
-      <Combo
-        ariaLabel="지역 선택"
-        placeholder={
-          !selected ? '지역' : regionStatus === 'loading' ? '불러오는 중…' : '지역'
-        }
-        value={regionValue}
-        options={regionOptions}
-        disabled={!selected || regionStatus === 'loading'}
-        emptyText={regionStatus === 'missing' ? '지역 데이터 없음' : '결과 없음'}
-        onChange={onRegion}
-      />
+        <span className="nav__sep">›</span>
+
+        <Combo
+          ariaLabel="지역 선택"
+          placeholder={
+            !selected ? '지역' : regionStatus === 'loading' ? '불러오는 중…' : '지역'
+          }
+          value={regionValue}
+          options={regionOptions}
+          disabled={!selected || regionStatus === 'loading'}
+          emptyText={regionStatus === 'missing' ? '지역 데이터 없음' : '결과 없음'}
+          onChange={onRegion}
+        />
+      </div>
     </div>
   )
 }
 
 /** findIndex 결과가 -1(못 찾음)이면 빈 값으로 — 첫 항목이 잘못 선택되지 않게. */
 const indexOrEmpty = (kind: string, i: number) => (i < 0 ? '' : `${kind}:${i}`)
+
+/** 대륙 원본 key → 한국어 라벨 (아무것도 안 골랐으면 빈 값) */
+const continentLabelOf = (key: string | null) =>
+  key ? (CONTINENTS.find((c) => c.key === key)?.label ?? '') : ''
+
+/** 필터(슬라이더) 아이콘 — 아이콘 라이브러리 없이 인라인 SVG */
+function FilterIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none">
+        <line x1="3" y1="6" x2="17" y2="6" />
+        <line x1="3" y1="10" x2="17" y2="10" />
+        <line x1="3" y1="14" x2="17" y2="14" />
+      </g>
+      <g fill="currentColor">
+        <circle cx="13" cy="6" r="2.2" />
+        <circle cx="7" cy="10" r="2.2" />
+        <circle cx="11" cy="14" r="2.2" />
+      </g>
+    </svg>
+  )
+}

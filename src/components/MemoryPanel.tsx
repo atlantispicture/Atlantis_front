@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SEASONS, SEASON_KEYS, seasonLabel, type Season } from '@/lib/season'
 import { useMemoryStore } from '@/store/useMemoryStore'
 import { useVisitStore } from '@/store/useVisitStore'
+import MemoryViewer from './MemoryViewer'
 
 const fmtDate = (ms: number) =>
   new Date(ms).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -24,6 +25,7 @@ export default function MemoryPanel() {
 
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [viewIndex, setViewIndex] = useState<number | null>(null)
 
   useEffect(() => {
     load()
@@ -35,6 +37,8 @@ export default function MemoryPanel() {
   const key = selectedRegion?.code ?? selected.code
   const targetName = selectedRegion?.name ?? selected.name
   const mine = items.filter((i) => (i.regionCode ?? i.countryCode) === key)
+  // 뷰어와 그리드가 같은 순서를 보도록 정렬을 한 번만 한다
+  const sorted = [...mine].sort((a, b) => b.capturedAt - a.capturedAt)
 
   const custom = customColors[key]
   // 색 우선순위: 직접 지정 > 계절 자동
@@ -46,6 +50,7 @@ export default function MemoryPanel() {
     add(files, {
       countryCode: selected.code,
       regionCode: selectedRegion?.code ?? null,
+      placeName: targetName,
     })
   }
 
@@ -133,18 +138,16 @@ export default function MemoryPanel() {
         <p className="sheet__empty">아직 추억이 없어요. 사진이나 영상을 올려보세요.</p>
       ) : (
         <ul className="mem__grid">
-          {mine
-            .slice()
-            .sort((a, b) => b.capturedAt - a.capturedAt)
-            .map((m) => (
+          {sorted
+            .map((m, idx) => (
               <li key={m.id} className="mem__item">
-                <a href={m.fileUrl} target="_blank" rel="noreferrer">
+                <button className="mem__open" onClick={() => setViewIndex(idx)}>
                   {m.thumbUrl ? (
                     <img src={m.thumbUrl} alt={m.fileName} loading="lazy" />
                   ) : (
                     <div className="mem__noimg">{m.kind === 'video' ? '영상' : '사진'}</div>
                   )}
-                </a>
+                </button>
                 {m.kind === 'video' && <span className="mem__play">▶</span>}
 
                 {/* 촬영 시각 워터마크 */}
@@ -159,6 +162,17 @@ export default function MemoryPanel() {
               </li>
             ))}
         </ul>
+      )}
+
+      {viewIndex !== null && (
+        <MemoryViewer
+          items={sorted}
+          index={viewIndex}
+          place={targetName}
+          onIndex={setViewIndex}
+          onClose={() => setViewIndex(null)}
+          onDelete={remove}
+        />
       )}
     </section>
   )

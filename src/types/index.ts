@@ -27,7 +27,10 @@ export interface Visit {
 /** 지역(행정구역) 단위 방문 기록 — 나라 방문(Visit)보다 한 단계 아래. */
 export interface RegionVisit {
   regionCode: RegionCode
+  /** 표시용 이름 — 지오데이터를 다시 받지 않고 목록을 그리기 위해 함께 저장한다 */
+  regionName: string
   countryCode: CountryCode
+  kind: 'region' | 'city'
   visited: boolean
   visitedYm?: string // 'YYYY-MM'
   note?: string

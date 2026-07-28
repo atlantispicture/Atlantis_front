@@ -21,6 +21,25 @@ const SRC_CITIES = `${BASE}/ne_10m_populated_places.geojson`
 
 const COORD_PRECISION = 3 // 소수점 자리수 (≈100m — 지구본/나라 줌 수준에 충분)
 
+// 전 세계 경계선 단순화 임계값(도). 0.2° ≈ 22km — 지구본 전체 뷰에서 1픽셀 미만이라
+// 눈에 띄지 않으면서 좌표 수를 130만 → 16만으로 줄인다.
+const LINE_TOLERANCE = 0.2
+
+/** 직전에 남긴 점에서 임계값 이상 떨어진 점만 남긴다 (선 렌더링용 근사 단순화) */
+function simplifyRing(ring, tol) {
+  const out = [ring[0]]
+  let last = ring[0]
+  for (let i = 1; i < ring.length - 1; i++) {
+    const p = ring[i]
+    if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) >= tol) {
+      out.push(p)
+      last = p
+    }
+  }
+  out.push(ring[ring.length - 1]) // 링을 닫기 위해 마지막 점은 유지
+  return out
+}
+
 async function fetchJson(url, label) {
   process.stdout.write(`⬇  ${label} …`)
   const res = await fetch(url)
@@ -114,6 +133,36 @@ function main() {
       `   → regions/{ISO3}.json  ${byCountry.size}개국, 합계 ${(total / 1024 / 1024).toFixed(1)}MB` +
         ` (나라당 평균 ${Math.round(total / byCountry.size / 1024)}KB)`,
     )
+
+    // 4) 전 세계 지역 경계선 (지구본 전체 뷰용) ------------------
+    // 원본 그대로면 130만 점이라 못 올린다. 지구본 축척에서 1픽셀도 안 되는
+    // 미세한 굴곡을 걷어내 선만 남긴다. 상세는 나라를 열 때 10m 원본으로 그린다.
+    const lines = []
+    let kept = 0
+    for (const f of admin1.features) {
+      if (!f.geometry) continue
+      const polys =
+        f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
+      for (const poly of polys) {
+        for (const ring of poly) {
+          if (ring.length < 3) continue
+          const s = simplifyRing(ring, LINE_TOLERANCE)
+          if (s.length < 2) continue
+          // [lng,lat,lng,lat,...] 평탄화 — JSON 이 작고 파싱도 빠르다
+          const flat = []
+          for (const [lng, lat] of s) flat.push(round(lng), round(lat))
+          lines.push(flat)
+          kept += s.length
+        }
+      }
+    }
+    const linesJson = JSON.stringify({ tolerance: LINE_TOLERANCE, rings: lines })
+    await writeFile(resolve(GEO_DIR, 'admin1-lines.json'), linesJson)
+    console.log(
+      `   → admin1-lines.json  ${lines.length.toLocaleString()}개 선, ` +
+        `${kept.toLocaleString()}점, ${(Buffer.byteLength(linesJson) / 1024 / 1024).toFixed(1)}MB`,
+    )
+
     console.log('\n✅ 완료')
   })()
 }

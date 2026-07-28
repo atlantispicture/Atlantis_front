@@ -18,12 +18,12 @@ function subdivFor(feature: CountryMeta['feature']): number {
   return 1
 }
 
-// 화이트 모노크롬: 흰 배경 위 검은 대륙.
-// 밝은 테마에선 '어두울수록 강조' — 방문한 나라가 가장 진하게 남는다.
-const COLOR_LAND = new THREE.Color('#4a4d52') // 미방문 육지 (짙은 회색)
-const COLOR_VISITED = new THREE.Color('#0d0d0f') // 방문 (거의 검정 — 수집됨)
-const COLOR_HOVER = new THREE.Color('#2c2e32') // 호버 강조 (한 단계 진하게)
-const COLOR_SELECTED = new THREE.Color('#000000') // 선택 강조 (순검정)
+// 라인아트: 바다도 육지도 흰색, 구분은 검은 경계선(WorldBorders)이 맡는다.
+// 색은 '다녀온 곳'에만 쓰여 신호가 된다.
+const COLOR_LAND = new THREE.Color('#ffffff') // 미방문 육지 (바다와 같은 흰색)
+const COLOR_VISITED = new THREE.Color('#d8d8dc') // 방문 (아주 옅은 회색 — 채워진 느낌만)
+const COLOR_HOVER = new THREE.Color('#ececef') // 호버
+const COLOR_SELECTED = new THREE.Color('#dcdce0') // 선택
 
 interface Props {
   countries: CountryMeta[]
@@ -89,10 +89,10 @@ export default function CountryMeshes({ countries, hoveredCode, hiddenCode }: Pr
 
         return (
           <mesh key={meta.code} geometry={geometry} raycast={IGNORE_RAYCAST}>
-            <meshStandardMaterial
+            {/* 바다와 완전히 같은 톤이 되도록 조명을 받지 않는 재질을 쓴다.
+                (standard 재질은 빛을 받아 같은 #ffffff 라도 미묘하게 달라진다) */}
+            <meshBasicMaterial
               color={color}
-              roughness={0.85}
-              metalness={0}
               polygonOffset
               polygonOffsetFactor={-1}
               polygonOffsetUnits={-1}

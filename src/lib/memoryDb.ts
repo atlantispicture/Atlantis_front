@@ -18,6 +18,8 @@ export interface MemoryRecord {
   /** 지역 코드 (행정구역 ISO 3166-2 또는 '{ISO3}:city:{이름}'). 나라 전체면 null */
   regionCode: string | null
   countryCode: string
+  /** 표시용 장소 이름 (지역명 또는 나라명) — 목록에서 코드 대신 보여준다 */
+  placeName: string
   kind: 'photo' | 'video'
   mime: string
   fileName: string

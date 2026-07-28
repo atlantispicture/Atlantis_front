@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import * as api from '@/lib/api'
 import type { CountryCode, RegionCode, RegionVisit, Visit } from '@/types'
 
 export interface SelectedCountry {
@@ -39,6 +40,51 @@ interface VisitState {
   isRegionVisited: (code: RegionCode) => boolean
   /** 해당 나라에서 방문 표시한 지역 수 */
   regionVisitedCount: (countryCode: CountryCode) => number
+
+  /** 서버에 저장된 방문 기록을 받아와 로컬에 반영한다 (로그인 직후) */
+  pullFromServer: () => Promise<void>
+}
+
+/**
+ * 로컬 우선(local-first) 저장.
+ * 화면은 즉시 바꾸고 서버 반영은 뒤에서 처리한다 — 서버가 꺼져 있어도 앱은 돌아야 한다.
+ * 서버가 돌려준 값이 로컬과 다르면(다른 기기에서 이미 바꾼 경우) 서버 쪽을 정답으로 삼는다.
+ */
+function pushVisit(code: CountryCode, expected: boolean) {
+  if (!api.isLoggedIn()) return
+  api
+    .toggleVisit(code)
+    .then((res) => {
+      if (res.visited !== expected) {
+        useVisitStore.setState((s) => ({
+          visits: { ...s.visits, [code]: { ...s.visits[code], visited: res.visited } },
+        }))
+      }
+    })
+    .catch(() => {
+      /* 오프라인 등 — 로컬 값은 유지한다 */
+    })
+}
+
+function pushRegionVisit(r: SelectedRegion, expected: boolean) {
+  if (!api.isLoggedIn()) return
+  api
+    .toggleRegionVisit(r.code, {
+      countryCode: r.countryCode,
+      regionName: r.name,
+      kind: r.kind === 'city' ? 'CITY' : 'REGION',
+    })
+    .then((res) => {
+      if (res.visited !== expected) {
+        useVisitStore.setState((s) => ({
+          regionVisits: {
+            ...s.regionVisits,
+            [r.code]: { ...s.regionVisits[r.code], visited: res.visited },
+          },
+        }))
+      }
+    })
+    .catch(() => {})
 }
 
 /**
@@ -62,9 +108,11 @@ export const useVisitStore = create<VisitState>((set, get) => ({
   toggleVisited: (code) =>
     set((state) => {
       const prev = state.visits[code]
+      const nowVisited = !prev?.visited
+      pushVisit(code, nowVisited)
       const next: Visit = {
         countryCode: code,
-        visited: !prev?.visited,
+        visited: nowVisited,
         visitedYm: prev?.visitedYm,
         companions: prev?.companions,
         note: prev?.note,
@@ -83,9 +131,12 @@ export const useVisitStore = create<VisitState>((set, get) => ({
     set((state) => {
       const prev = state.regionVisits[r.code]
       const nowVisited = !prev?.visited
+      pushRegionVisit(r, nowVisited)
       const next: RegionVisit = {
         regionCode: r.code,
+        regionName: r.name,
         countryCode: r.countryCode,
+        kind: r.kind,
         visited: nowVisited,
         visitedYm: prev?.visitedYm,
         note: prev?.note,
@@ -119,4 +170,45 @@ export const useVisitStore = create<VisitState>((set, get) => ({
   regionVisitedCount: (countryCode) =>
     Object.values(get().regionVisits).filter((r) => r.visited && r.countryCode === countryCode)
       .length,
+
+  pullFromServer: async () => {
+    if (!api.isLoggedIn()) return
+    try {
+      const [visits, regions] = await Promise.all([api.listVisits(), api.listRegionVisits()])
+
+      const nextVisits: Record<CountryCode, Visit> = {}
+      for (const v of visits) {
+        nextVisits[v.countryCode] = {
+          countryCode: v.countryCode,
+          visited: v.visited,
+          visitedYm: v.visitedYm ?? undefined,
+          companions: v.companions ?? undefined,
+          note: v.note ?? undefined,
+          color: v.color ?? undefined,
+          scope: 'private',
+          updatedAt: Date.now(),
+        }
+      }
+
+      const nextRegions: Record<RegionCode, RegionVisit> = {}
+      for (const r of regions) {
+        nextRegions[r.regionCode] = {
+          regionCode: r.regionCode,
+          regionName: r.regionName,
+          countryCode: r.countryCode,
+          kind: r.kind === 'CITY' ? 'city' : 'region',
+          visited: r.visited,
+          visitedYm: r.visitedYm ?? undefined,
+          note: r.note ?? undefined,
+          scope: 'private',
+          updatedAt: Date.now(),
+        }
+      }
+
+      // 서버를 정답으로 삼는다 — 여러 기기에서 쓰면 로컬 병합은 충돌이 복잡해진다.
+      set({ visits: nextVisits, regionVisits: nextRegions })
+    } catch {
+      /* 서버가 없으면 로컬 상태 그대로 */
+    }
+  },
 }))

@@ -16,11 +16,11 @@ interface Baked {
 const FILL_RADIUS = 1.0055 // 나라 메시(1.004) 위
 const LINE_RADIUS = 1.007 // 채움 위에 경계선
 
-// 나라를 열면 그 안이 '지역 지도'가 된다 — 방문한 지역만 검게 남는다.
-const COLOR_REGION = new THREE.Color('#7d8288') // 미방문 지역
-const COLOR_VISITED = new THREE.Color('#0d0d0f') // 방문한 지역
-const COLOR_HOVER = new THREE.Color('#4a4d52')
-const COLOR_SELECTED = new THREE.Color('#000000')
+// 라인아트 톤에 맞춘다 — 면은 흰색, 구분은 검은 경계선이 맡는다.
+const COLOR_REGION = new THREE.Color('#ffffff') // 미방문 지역
+const COLOR_VISITED = new THREE.Color('#d8d8dc') // 방문한 지역 (옅게 채워짐)
+const COLOR_HOVER = new THREE.Color('#ececef')
+const COLOR_SELECTED = new THREE.Color('#dcdce0')
 
 /**
  * 지역은 나라보다 작아 세분화가 덜 필요하다.
@@ -137,10 +137,9 @@ export default function RegionMeshes({ regions, hoveredCode }: Props) {
         return (
           <group key={region.code}>
             <mesh geometry={fill} raycast={IGNORE_RAYCAST}>
-              <meshStandardMaterial
+              {/* CountryMeshes 와 같은 무광 재질 — 바다와 톤이 어긋나지 않게 */}
+              <meshBasicMaterial
                 color={color}
-                roughness={0.9}
-                metalness={0}
                 polygonOffset
                 polygonOffsetFactor={-2}
                 polygonOffsetUnits={-2}
@@ -148,7 +147,7 @@ export default function RegionMeshes({ regions, hoveredCode }: Props) {
             </mesh>
             {/* 경계선 — 블록이 나뉘어 보이게 하는 핵심 */}
             <lineSegments geometry={outline} raycast={IGNORE_RAYCAST}>
-              <lineBasicMaterial color="#ffffff" transparent opacity={0.75} />
+              <lineBasicMaterial color="#111114" transparent opacity={0.85} />
             </lineSegments>
           </group>
         )

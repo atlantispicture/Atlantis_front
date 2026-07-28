@@ -8,7 +8,9 @@ import { useRegions } from '@/lib/useRegions'
 import { useVisitStore } from '@/store/useVisitStore'
 import Atmosphere from './Atmosphere'
 import CountryMeshes from './CountryMeshes'
+import PlaceCallouts from './PlaceCallouts'
 import RegionMeshes from './RegionMeshes'
+import WorldBorders from './WorldBorders'
 
 const DIST_DEFAULT = 3
 const DIST_COUNTRY = 1.85
@@ -17,7 +19,15 @@ const DIST_CITY = 1.28 // 도시 선택 시 — 가장 깊이
 const DIST_MIN = 1.25 // 작은 나라도 들여다볼 수 있게 조금 더 가깝게
 const DIST_MAX = 5
 const ZOOM_STEP = 1.12 // 휠 한 칸당 배율 (클수록 빠름)
-const DRAG_SENS = 0.006
+// 화면 폭 전체를 한 번 쓸면 이만큼(라디안) 돈다 ≈ 195°.
+// 픽셀당 고정값이 아니라 '화면 비율' 기준이라 폰이든 데스크톱이든 감각이 같다.
+const SWIPE_TURN = 3.4
+const REF_WIDTH = 1280 // 폭을 못 읽을 때의 대체값
+// 확대 상태의 감도를 추가로 눌러주는 지수. 1이면 물리적으로 정확한 값 그대로,
+// 클수록 확대했을 때만 더 둔해진다 (기본 거리에서는 영향 없음).
+const ZOOM_DAMP = 1.4
+const INERTIA_DECAY = 3.4 // 관성 감쇠 (클수록 빨리 멈춤)
+const INERTIA_MIN = 0.02 // 이보다 느려지면 멈춘 것으로 본다
 const PITCH_LIMIT = 1.4 // 극점 뒤집힘 방지
 const IDLE_MS = 2500 // 이 시간 무입력이면 자동 회전 재개
 const IDLE_SPEED = 0.035
@@ -67,6 +77,13 @@ export default function GlobeScene({ countries }: { countries: CountryMeta[] }) 
   const dragging = useRef(false)
   const last = useRef({ x: 0, y: 0 })
   const lastInteract = useRef(0)
+
+  // 멀티터치 추적 (핀치 줌) + 관성
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const pinchStart = useRef<{ dist: number; dist0: number } | null>(null)
+  const velYaw = useRef(0)
+  const velPitch = useRef(0)
+  const lastMoveAt = useRef(0)
 
   const select = useVisitStore((s) => s.select)
   const selectRegion = useVisitStore((s) => s.selectRegion)
@@ -129,34 +146,106 @@ export default function GlobeScene({ countries }: { countries: CountryMeta[] }) 
     markInteract()
   }, [phase, selected, selectedRegion])
 
-  // 드래그 회전 + 휠 줌
+  // 드래그 회전(관성 포함) + 핀치/휠 줌
   useEffect(() => {
     const el = gl.domElement
 
+    /**
+     * 감도 = 화면 폭 비율 × 줌 보정.
+     *
+     * 확대하면 지구가 화면에서 커지므로, 같은 픽셀 이동이 더 작은 각도에 해당해야
+     * 손가락 아래의 지점이 그대로 따라온다. 화면상 반지름은 asin(1/d) 에 비례하니
+     * 라디안/픽셀은 그 역수에 비례한다. 기본 거리(3)에서 1이 되도록 정규화한다.
+     */
+    const sensitivity = () => {
+      const base = SWIPE_TURN / (el.clientWidth || REF_WIDTH)
+      const d = THREE.MathUtils.clamp(camera.position.z, DIST_MIN, DIST_MAX)
+      const zoom = Math.asin(1 / DIST_DEFAULT) / Math.asin(1 / d)
+      // 물리적으로 정확한 값(zoom)만으로는 확대 상태가 아직 예민하게 느껴져
+      // 지수를 얹어 더 눌러준다. 기본 거리에서는 zoom=1 이라 영향이 없다.
+      return base * Math.pow(zoom, ZOOM_DAMP)
+    }
+
+    /** 두 손가락 사이 거리 — 핀치 줌 판정용 */
+    const pinchDistance = () => {
+      const pts = [...pointers.current.values()]
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+    }
+
     const onDown = (e: PointerEvent) => {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      // 캡처해 두면 손가락이 캔버스 밖으로 나가도 추적이 끊기지 않는다
+      el.setPointerCapture?.(e.pointerId)
+
+      if (pointers.current.size === 2) {
+        pinchStart.current = { dist: pinchDistance(), dist0: targetDist.current }
+      }
       pointerDown.current = true
       dragging.current = false
+      velYaw.current = 0
+      velPitch.current = 0
       last.current = { x: e.clientX, y: e.clientY }
       markInteract()
     }
+
     const onMove = (e: PointerEvent) => {
-      if (!pointerDown.current) return
-      if (useVisitStore.getState().phase === 'country') return // 상세 중엔 회전 잠금
+      if (!pointers.current.has(e.pointerId)) return
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // 두 손가락 → 핀치 줌 (모바일엔 휠이 없다)
+      if (pointers.current.size >= 2 && pinchStart.current) {
+        const ratio = pinchStart.current.dist / Math.max(pinchDistance(), 1)
+        targetDist.current = THREE.MathUtils.clamp(
+          pinchStart.current.dist0 * ratio,
+          DIST_MIN,
+          DIST_MAX,
+        )
+        dragging.current = true // 핀치 후 탭으로 오인해 선택되지 않게
+        markInteract()
+        return
+      }
+
       const dx = e.clientX - last.current.x
       const dy = e.clientY - last.current.y
       if (Math.abs(dx) + Math.abs(dy) > 3) dragging.current = true
       last.current = { x: e.clientX, y: e.clientY }
-      targetYaw.current += dx * DRAG_SENS
+
+      const s = sensitivity()
+      targetYaw.current += dx * s
       targetPitch.current = THREE.MathUtils.clamp(
-        targetPitch.current + dy * DRAG_SENS,
+        targetPitch.current + dy * s,
         -PITCH_LIMIT,
         PITCH_LIMIT,
       )
+
+      // 손을 뗀 뒤 이어서 굴러가도록 속도를 기억한다 (초당 라디안)
+      const now = performance.now()
+      const dt = Math.max(now - lastMoveAt.current, 1) / 1000
+      lastMoveAt.current = now
+      velYaw.current = (dx * s) / dt
+      velPitch.current = (dy * s) / dt
+
       markInteract()
     }
-    const onUp = () => {
-      pointerDown.current = false
+
+    const onUp = (e: PointerEvent) => {
+      pointers.current.delete(e.pointerId)
+      el.releasePointerCapture?.(e.pointerId)
+      if (pointers.current.size < 2) pinchStart.current = null
+      if (pointers.current.size === 0) {
+        pointerDown.current = false
+        // 마지막 움직임이 오래됐으면 관성을 주지 않는다 (멈춘 채 떼는 경우)
+        if (performance.now() - lastMoveAt.current > 90) {
+          velYaw.current = 0
+          velPitch.current = 0
+        }
+      } else {
+        // 한 손가락만 남으면 그 지점부터 다시 시작 (튐 방지)
+        const rest = [...pointers.current.values()][0]
+        last.current = { x: rest.x, y: rest.y }
+      }
     }
+
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       // deltaMode 정규화: 0=픽셀, 1=줄, 2=페이지 — 휠/트랙패드마다 단위가 달라서 맞춰준다.
@@ -174,18 +263,40 @@ export default function GlobeScene({ countries }: { countries: CountryMeta[] }) 
     el.addEventListener('pointerdown', onDown)
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    // 브라우저가 제스처를 가로채면(스크롤 전환 등) pointercancel 이 온다 — 같이 정리한다
+    window.addEventListener('pointercancel', onUp)
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => {
       el.removeEventListener('pointerdown', onDown)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
       el.removeEventListener('wheel', onWheel)
     }
-  }, [gl])
+  }, [gl, camera])
 
   useFrame((_, delta) => {
     const g = groupRef.current
     if (!g) return
+
+    // 손을 뗀 뒤 이어서 굴러가는 관성 — 모바일 플릭 조작의 핵심
+    const spinning = Math.abs(velYaw.current) > INERTIA_MIN || Math.abs(velPitch.current) > INERTIA_MIN
+    if (!pointerDown.current && spinning) {
+      targetYaw.current += velYaw.current * delta
+      targetPitch.current = THREE.MathUtils.clamp(
+        targetPitch.current + velPitch.current * delta,
+        -PITCH_LIMIT,
+        PITCH_LIMIT,
+      )
+      // 프레임률과 무관한 지수 감쇠
+      const decay = Math.exp(-INERTIA_DECAY * delta)
+      velYaw.current *= decay
+      velPitch.current *= decay
+      markInteract() // 관성이 도는 동안엔 자동 자전이 끼어들지 않게
+    } else if (spinning === false && velYaw.current !== 0) {
+      velYaw.current = 0
+      velPitch.current = 0
+    }
 
     // 홈에서 일정 시간 무입력이면 천천히 자전
     if (phase === 'globe' && performance.now() - lastInteract.current > IDLE_MS) {
@@ -252,14 +363,8 @@ export default function GlobeScene({ countries }: { countries: CountryMeta[] }) 
         }}
       >
         <sphereGeometry args={[0.997, 96, 96]} />
-        {/* 흰 바다 — 살짝 투명해 뒷면 대륙이 옅게 비친다 */}
-        <meshStandardMaterial
-          color="#ffffff"
-          roughness={1}
-          metalness={0}
-          transparent
-          opacity={0.88}
-        />
+        {/* 순백 바다 — 뒷면이 비치면 선이 겹쳐 지저분해지므로 불투명 */}
+        <meshBasicMaterial color="#ffffff" />
       </mesh>
 
       <CountryMeshes
@@ -268,8 +373,15 @@ export default function GlobeScene({ countries }: { countries: CountryMeta[] }) 
         hiddenCode={showRegions ? selected!.code : null}
       />
 
+      {/* 전 세계 지역 경계선 — 처음부터 나라가 지역 단위로 나뉘어 보이게 한다.
+          나라를 열면 그 나라는 고해상도 블록이 대신 그리므로 잠시 감춘다. */}
+      <WorldBorders visible={!showRegions} />
+
       {/* 나라를 연 동안에만 행정구역 블록으로 대체한다 */}
       {showRegions && <RegionMeshes regions={regions} hoveredCode={hovered} />}
+
+      {/* 추억이 있는 곳에 지시선 + 대표 사진 카드 */}
+      {phase === 'country' && <PlaceCallouts />}
       <Atmosphere />
     </group>
   )
