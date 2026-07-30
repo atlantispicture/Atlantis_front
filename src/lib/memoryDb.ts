@@ -28,6 +28,8 @@ export interface MemoryRecord {
   capturedSource: 'exif' | 'file'
   season: Season
   createdAt: number
+  /** 서버에 올렸으면 서버가 부여한 id — 같은 사진이 서버에서 또 내려오는 걸 막는다 */
+  serverId?: string
   file: Blob
   thumb: Blob | null
 }
@@ -36,6 +38,8 @@ export interface MemoryRecord {
 export interface MemoryView extends Omit<MemoryRecord, 'file' | 'thumb'> {
   thumbUrl: string | null
   fileUrl: string
+  /** 서버에만 있는 항목 — 원본은 열 때 받아야 한다 (fileUrl 이 서버 경로) */
+  remote?: boolean
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null

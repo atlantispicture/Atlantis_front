@@ -10,6 +10,7 @@ import Atmosphere from './Atmosphere'
 import CountryMeshes from './CountryMeshes'
 import PlaceCallouts from './PlaceCallouts'
 import RegionMeshes from './RegionMeshes'
+import WorldLines from './WorldLines'
 import WorldBorders from './WorldBorders'
 
 const DIST_DEFAULT = 3
@@ -376,6 +377,9 @@ export default function GlobeScene({ countries }: { countries: CountryMeta[] }) 
       {/* 전 세계 지역 경계선 — 처음부터 나라가 지역 단위로 나뉘어 보이게 한다.
           나라를 열면 그 나라는 고해상도 블록이 대신 그리므로 잠시 감춘다. */}
       <WorldBorders visible={!showRegions} />
+
+      {/* 전 세계 지역 경계선 — 나라를 열지 않아도 지구본이 나뉘어 보이게 */}
+      <WorldLines />
 
       {/* 나라를 연 동안에만 행정구역 블록으로 대체한다 */}
       {showRegions && <RegionMeshes regions={regions} hoveredCode={hovered} />}

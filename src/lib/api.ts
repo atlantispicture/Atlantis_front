@@ -86,6 +86,35 @@ export const me = () =>
     '/api/auth/me',
   )
 
+// ── 프로필 · 친구 ────────────────────────────────────
+export interface UserSummary {
+  userId: string
+  handle: string
+  displayName: string
+  avatarUrl: string | null
+  following: boolean
+  mutual: boolean
+}
+
+export const getProfile = () => request<UserSummary>('/api/me')
+
+export const updateProfile = (body: { displayName?: string; avatarUrl?: string | null }) =>
+  request<UserSummary>('/api/me', { method: 'PATCH', body: JSON.stringify(body) })
+
+export const searchUsers = (q: string) =>
+  request<UserSummary[]>(`/api/users/search?q=${encodeURIComponent(q)}`)
+
+/** 서로 팔로우한 사람 — 함께 간 사람으로 태그할 후보 */
+export const listFriends = () => request<UserSummary[]>('/api/me/friends')
+
+export const listFollowing = () => request<UserSummary[]>('/api/me/following')
+
+export const followUser = (handle: string) =>
+  request<UserSummary>('/api/follows', { method: 'POST', body: JSON.stringify({ handle }) })
+
+export const unfollowUser = (handle: string) =>
+  request<void>(`/api/follows/${encodeURIComponent(handle)}`, { method: 'DELETE' })
+
 // ── 나라 방문 ────────────────────────────────────────
 export interface VisitDto {
   id: string

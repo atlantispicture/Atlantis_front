@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MemoryView } from '@/lib/memoryDb'
+import { loadOriginal } from '@/lib/memorySync'
 import { SEASONS, seasonLabel } from '@/lib/season'
 
 const fmtFull = (ms: number) =>
@@ -43,6 +44,8 @@ export default function MemoryViewer({
   // state 는 화면(transform) 표시에만 쓴다.
   const dragXRef = useRef(0)
   const [dragX, setDragX] = useState(0)
+  // 서버 항목의 원본 objectURL 캐시 (id → url)
+  const [resolved, setResolved] = useState<Record<string, string>>({})
   const SWIPE_MIN = 60 // 이보다 적게 밀면 제자리로 되돌린다
 
   const go = useCallback(
@@ -70,6 +73,22 @@ export default function MemoryViewer({
     else if (index > items.length - 1) onIndex(items.length - 1)
   }, [items.length, index, onClose, onIndex])
 
+  /**
+   * 서버에만 있는 항목은 원본을 인증 요청으로 받아야 한다 (<img src> 는 헤더를 못 싣는다).
+   * 목록을 열 때 미리 받으면 수십 MB 를 낭비하므로, 실제로 볼 때 한 번만 받아 캐시한다.
+   */
+  useEffect(() => {
+    if (!item?.remote) return
+    if (resolved[item.id]) return
+    let alive = true
+    loadOriginal(item.fileUrl).then((url) => {
+      if (alive && url) setResolved((m) => ({ ...m, [item.id]: url }))
+    })
+    return () => {
+      alive = false
+    }
+  }, [item, resolved])
+
   // 현재 사진의 썸네일이 필름스트립 밖으로 나가지 않게 따라 스크롤
   useEffect(() => {
     stripRef.current
@@ -78,6 +97,9 @@ export default function MemoryViewer({
   }, [index])
 
   if (!item) return null
+
+  // 로컬 항목은 fileUrl 이 이미 objectURL, 서버 항목은 받아온 것을 쓴다
+  const src = item.remote ? resolved[item.id] : item.fileUrl
 
   return (
     <div className="viewer" onClick={onClose} role="dialog" aria-modal="true">
@@ -112,11 +134,13 @@ export default function MemoryViewer({
       >
         {item.kind === 'video' ? (
           // key 를 줘야 항목이 바뀔 때 이전 영상이 계속 재생되지 않는다
-          <video key={item.id} src={item.fileUrl} controls autoPlay className="viewer__media" />
+          <video key={item.id} src={src} controls autoPlay className="viewer__media" />
+        ) : !src ? (
+          <div className="viewer__loading">불러오는 중…</div>
         ) : (
           <img
             key={item.id}
-            src={item.fileUrl}
+            src={src}
             alt={item.fileName}
             className="viewer__media"
             draggable={false}

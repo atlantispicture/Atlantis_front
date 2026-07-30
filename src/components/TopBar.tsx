@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useCountries } from '@/lib/useCountries'
+import { useSocialStore } from '@/store/useSocialStore'
 import { useVisitStore } from '@/store/useVisitStore'
+import FriendsModal from './FriendsModal'
+import ProfileModal from './ProfileModal'
 
 type Panel = 'menu' | 'login' | null
 
@@ -23,8 +26,10 @@ export default function TopBar() {
   const checkServer = useAuthStore((s) => s.checkServer)
   const login = useAuthStore((s) => s.login)
   const logout = useAuthStore((s) => s.logout)
+  const resetSocial = useSocialStore((s) => s.reset)
 
   const [panel, setPanel] = useState<Panel>(null)
+  const [modal, setModal] = useState<'profile' | 'friends' | null>(null)
   const [input, setInput] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -98,19 +103,30 @@ export default function TopBar() {
             <span className="top__handle">@{handle}</span>
           </div>
 
-          <button className="top__item" disabled title="다음 단계에서 연결합니다">
-            <span>마이페이지</span>
-            <em>준비 중</em>
+          <button
+            className="top__item"
+            onClick={() => {
+              setModal('profile')
+              setPanel(null)
+            }}
+          >
+            마이페이지
           </button>
-          <button className="top__item" disabled title="친구 기능은 백엔드 연동 후">
-            <span>친구</span>
-            <em>준비 중</em>
+          <button
+            className="top__item"
+            onClick={() => {
+              setModal('friends')
+              setPanel(null)
+            }}
+          >
+            친구
           </button>
 
           <button
             className="top__item top__item--danger"
             onClick={() => {
               logout()
+              resetSocial()
               setPanel(null)
             }}
           >
@@ -118,6 +134,9 @@ export default function TopBar() {
           </button>
         </div>
       )}
+
+      {modal === 'profile' && <ProfileModal onClose={() => setModal(null)} />}
+      {modal === 'friends' && <FriendsModal onClose={() => setModal(null)} />}
     </div>
   )
 }

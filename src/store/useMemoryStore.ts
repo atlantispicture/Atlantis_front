@@ -10,6 +10,7 @@ import {
   type MemoryView,
 } from '@/lib/memoryDb'
 import { readCapturedAt } from '@/lib/exif'
+import { deleteRemote, pullMemories, pushMemory } from '@/lib/memorySync'
 import { dominantSeason, seasonColor, seasonOf, type Season } from '@/lib/season'
 
 /** 지역 색은 '사용자 지정'이 '계절 자동'을 이긴다. */
@@ -24,6 +25,8 @@ interface MemoryState {
   customColors: Record<string, string>
 
   load: () => Promise<void>
+  /** 서버의 추억을 받아 로컬에 없는 것만 합친다 */
+  syncFromServer: () => Promise<void>
   add: (
     files: FileList | File[],
     target: { countryCode: string; regionCode: string | null; placeName: string },
@@ -57,6 +60,23 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     if (get().loaded) return
     const recs = await allMemories()
     set({ items: recs.map(toView), loaded: true })
+    void get().syncFromServer()
+  },
+
+  /**
+   * 서버에 있고 로컬에 없는 추억을 가져와 합친다 (다른 기기에서 올린 것).
+   * 이미 올려본 사진은 serverId 로 걸러 중복을 막는다.
+   */
+  syncFromServer: async () => {
+    const pulled = await pullMemories()
+    if (pulled.length === 0) return
+    set((s) => {
+      const known = new Set(s.items.map((i) => i.serverId).filter(Boolean))
+      const fresh = pulled
+        .filter((p) => !known.has(p.id))
+        .map((p) => ({ ...p, serverId: p.id }) as MemoryView)
+      return fresh.length ? { items: [...s.items, ...fresh] } : {}
+    })
   },
 
   add: async (files, target) => {
@@ -87,6 +107,15 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
         }
         await putMemory(rec)
         set((s) => ({ items: [...s.items, toView(rec)] }))
+
+        // 서버에도 올린다 (로컬 우선 — 실패해도 화면엔 이미 떠 있다)
+        const serverId = await pushMemory(rec)
+        if (serverId) {
+          await putMemory({ ...rec, serverId })
+          set((s) => ({
+            items: s.items.map((i) => (i.id === rec.id ? { ...i, serverId } : i)),
+          }))
+        }
       } finally {
         set((s) => ({ uploading: s.uploading - 1 }))
       }
@@ -94,10 +123,13 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
   },
 
   remove: async (id) => {
-    await deleteMemory(id)
+    const gone = get().items.find((i) => i.id === id)
+    // 서버에도 있으면 함께 지운다 — 안 그러면 다음 동기화에 되살아난다
+    if (gone?.serverId) void deleteRemote(gone.serverId)
+    if (!gone?.remote) await deleteMemory(id) // 서버 전용 항목은 로컬 DB에 없다
     set((s) => {
-      const gone = s.items.find((i) => i.id === id)
-      if (gone) revokeMemoryUrls(gone) // objectURL 누수 방지
+      const target = s.items.find((i) => i.id === id)
+      if (target) revokeMemoryUrls(target) // objectURL 누수 방지
       return { items: s.items.filter((i) => i.id !== id) }
     })
   },

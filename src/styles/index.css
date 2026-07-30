@@ -281,8 +281,11 @@ body,
 
 /* 좁은 화면에선 펼친 패널이 화면 폭을 거의 다 쓰므로,
    우상단 로그인 배지(top 70 + 높이 34)를 피해 아래로 내린다. */
-@media (max-width: 560px) {
+/* 펼친 패널은 460px 라, 화면이 좁으면 우상단 메뉴바와 같은 높이에서 부딪힌다.
+   (460 + 메뉴바 + 여백 ≈ 700px 미만이면 겹침) 그 아래에서는 메뉴바 밑으로 내린다. */
+@media (max-width: 700px) {
   .nav {
+    top: 62px;
     right: 16px;
     width: auto;
   }
@@ -861,6 +864,283 @@ body,
   font-size: 12px;
   color: var(--muted);
   text-align: center;
+}
+
+/* ---- 공용 모달 (마이페이지 · 친구) ---- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+.modal__card {
+  position: relative;
+  width: 340px;
+  max-width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 24px 24px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
+  animation: onb-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.modal__card--wide {
+  width: 400px;
+  align-items: stretch;
+  gap: 12px;
+}
+.modal__x {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* 마이페이지 */
+.prof__avatar {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--panel-2);
+  box-shadow: 0 0 0 5px #fff, 0 0 0 6px rgba(0, 0, 0, 0.08);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.prof__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.prof__name {
+  font-size: 21px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+.prof__handle {
+  font-size: 13px;
+  color: var(--muted);
+}
+.prof__stats {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  margin: 10px 0 4px;
+}
+.prof__stats div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  background: var(--panel-2);
+  border-radius: 12px;
+}
+.prof__stats b {
+  font-size: 18px;
+  font-weight: 800;
+}
+.prof__stats span {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.prof__edit,
+.prof__save {
+  width: 100%;
+  padding: 13px;
+  border: none;
+  border-radius: 999px;
+  background: var(--visited);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.prof__edit:hover {
+  opacity: 0.88;
+}
+.prof__form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.prof__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.prof__field span {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.prof__field input {
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+.prof__field input:focus {
+  border-color: rgba(0, 0, 0, 0.45);
+}
+.prof__err {
+  font-size: 11.5px;
+  color: #c0392b;
+}
+.prof__actions {
+  display: flex;
+  gap: 8px;
+}
+.prof__cancel {
+  flex: 0 0 90px;
+  padding: 13px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  background: none;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.prof__save {
+  flex: 1;
+}
+.prof__save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 친구 */
+.fr__title {
+  font-size: 19px;
+  font-weight: 800;
+}
+.fr__hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.fr__search {
+  padding: 11px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-family: inherit;
+  outline: none;
+}
+.fr__search:focus {
+  border-color: rgba(0, 0, 0, 0.45);
+}
+.fr__section h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.fr__section h3 em {
+  font-style: normal;
+  color: var(--text);
+}
+.fr__empty {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  padding: 8px 2px;
+}
+.fr__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.fr__list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+}
+.fr__list li + li {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.fr__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.fr__avatar--letter {
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.fr__who {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.fr__who b {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fr__who em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+.fr__badge {
+  font-size: 10.5px;
+  color: #fff;
+  background: var(--visited);
+  padding: 2px 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.fr__btn {
+  padding: 6px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.fr__btn--on {
+  background: var(--visited);
+  border-color: var(--visited);
+  color: #fff;
 }
 
 /* ---- 상단 메뉴바 ---- */
@@ -1920,6 +2200,16 @@ body,
 .viewer__nav--next {
   right: 18px;
 }
+.viewer__loading {
+  display: grid;
+  place-items: center;
+  width: 60vw;
+  max-width: 400px;
+  aspect-ratio: 4 / 3;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+
 /* 하단 필름스트립 */
 .viewer__strip {
   position: absolute;
