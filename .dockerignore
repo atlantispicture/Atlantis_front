@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.local
+.env.production
+# 지리 데이터는 빌드 중 fetch-data 로 받는다 (25MB 를 이미지 컨텍스트에 넣지 않는다)
+public/geo
+.git
+*.log
