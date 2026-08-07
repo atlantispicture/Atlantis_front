@@ -28,6 +28,8 @@ export interface MemoryRecord {
   capturedSource: 'exif' | 'file'
   season: Season
   createdAt: number
+  /** 함께 간 사람 — 가입 안 한 친구는 userId 없이 이름만 */
+  participants?: { userId: string | null; displayName: string }[]
   /** 서버에 올렸으면 서버가 부여한 id — 같은 사진이 서버에서 또 내려오는 걸 막는다 */
   serverId?: string
   file: Blob

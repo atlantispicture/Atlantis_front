@@ -25,12 +25,16 @@ export default function TopBar() {
   const error = useAuthStore((s) => s.error)
   const checkServer = useAuthStore((s) => s.checkServer)
   const login = useAuthStore((s) => s.login)
+  const signup = useAuthStore((s) => s.signup)
   const logout = useAuthStore((s) => s.logout)
   const resetSocial = useSocialStore((s) => s.reset)
 
   const [panel, setPanel] = useState<Panel>(null)
   const [modal, setModal] = useState<'profile' | 'friends' | null>(null)
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState('') // 가입 시 핸들
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
   const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -49,13 +53,32 @@ export default function TopBar() {
 
   const onAccount = () => {
     if (server === 'offline') return void checkServer()
-    setPanel(panel ? null : handle ? 'menu' : 'login')
+    const next = panel ? null : handle ? 'menu' : 'login'
+    // 로그인 패널을 열 때마다 초기 상태로 — 직전에 '가입' 탭을 썼다면
+    // 핸들 칸이 빈 채로 남아 버튼이 눌리지 않는다.
+    if (next === 'login') {
+      setMode('login')
+      setPassword('')
+      setInput('')
+    }
+    setPanel(next)
   }
 
+  const canSubmit =
+    email.trim().length > 3 &&
+    password.length >= 8 &&
+    (mode === 'login' || input.trim().length >= 2)
+
   const submit = async () => {
-    if (!input.trim()) return
-    if (await login(input.trim())) {
+    if (!canSubmit) return
+    const ok =
+      mode === 'signup'
+        ? await signup({ email: email.trim(), password, handle: input.trim() })
+        : await login(email.trim(), password)
+    if (ok) {
       setPanel(null)
+      setEmail('')
+      setPassword('')
       setInput('')
     }
   }
@@ -80,18 +103,51 @@ export default function TopBar() {
 
       {panel === 'login' && (
         <div className="top__panel">
-          <p className="top__msg">핸들만 입력하면 계정이 만들어집니다 (개발용)</p>
+          <div className="top__tabs">
+            <button
+              className={mode === 'login' ? 'top__tab top__tab--on' : 'top__tab'}
+              onClick={() => setMode('login')}
+            >
+              로그인
+            </button>
+            <button
+              className={mode === 'signup' ? 'top__tab top__tab--on' : 'top__tab'}
+              onClick={() => setMode('signup')}
+            >
+              가입
+            </button>
+          </div>
+
           <input
             className="top__input"
-            placeholder="예: jaeyoon"
-            value={input}
+            type="email"
+            placeholder="이메일"
+            value={email}
             autoFocus
-            onChange={(e) => setInput(e.target.value.toLowerCase())}
+            onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
           />
+          <input
+            className="top__input"
+            type="password"
+            placeholder="비밀번호 (8자 이상)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submit()}
+          />
+          {mode === 'signup' && (
+            <input
+              className="top__input"
+              placeholder="핸들 (영소문자·숫자·밑줄)"
+              value={input}
+              onChange={(e) => setInput(e.target.value.toLowerCase())}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+            />
+          )}
+
           {error && <p className="top__err">{error}</p>}
-          <button className="top__go" disabled={!input.trim() || loggingIn} onClick={submit}>
-            {loggingIn ? '접속 중…' : '시작'}
+          <button className="top__go" disabled={!canSubmit || loggingIn} onClick={submit}>
+            {loggingIn ? '접속 중…' : mode === 'signup' ? '가입하고 시작' : '로그인'}
           </button>
         </div>
       )}

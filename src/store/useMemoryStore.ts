@@ -29,7 +29,13 @@ interface MemoryState {
   syncFromServer: () => Promise<void>
   add: (
     files: FileList | File[],
-    target: { countryCode: string; regionCode: string | null; placeName: string },
+    target: {
+      countryCode: string
+      regionCode: string | null
+      placeName: string
+      /** 함께 간 사람 (선택) */
+      participants?: { userId: string | null; displayName: string }[]
+    },
   ) => Promise<void>
   remove: (id: string) => Promise<void>
   setCustomColor: (key: string, color: string | null) => void
@@ -102,6 +108,7 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
           capturedSource: source,
           season: seasonOf(at),
           createdAt: Date.now(),
+          participants: target.participants ?? [],
           file,
           thumb,
         }

@@ -24,11 +24,17 @@ pnpm-debug.log*
 Thumbs.db
 
 # env
+# 비밀이 든 것만 막고, 예시와 개발용 기본값은 공유한다
+# (VITE_ 값은 어차피 번들에 박히므로 비밀을 두면 안 된다)
 .env
-.env.*
-!.env.example
+.env.local
+.env.production
+!.env.development
+!.env.*.example
 
-# large assets (다운로드 스크립트로 받는 것들)
+# large assets — npm run fetch-data 로 언제든 다시 만든다 (합계 약 25MB)
+public/geo/*.geojson
 public/geo/*.json
+public/geo/regions/
 public/textures/*.jpg
 public/textures/*.png

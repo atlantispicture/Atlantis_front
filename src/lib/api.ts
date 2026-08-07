@@ -5,8 +5,13 @@
  * 호출부가 조용히 로컬 모드로 남을 수 있도록, 실패를 예외 대신 결과로 돌려준다.
  */
 
-// 8080·8081 은 이 PC 의 다른 서비스가 점유 중이라 백엔드는 8082 에 뜬다.
-const BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8082'
+/**
+ * 백엔드 주소. 배포 환경마다 다르므로 빌드 시 VITE_API_BASE 로 주입한다.
+ * (.env.development / .env.production — 예시는 .env.production.example)
+ * 값이 없으면 로컬 기본값으로 떨어진다.
+ */
+export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8082'
+const BASE = API_BASE
 const TOKEN_KEY = 'atlantis.token'
 const HANDLE_KEY = 'atlantis.handle'
 
@@ -33,6 +38,17 @@ export class ApiError extends Error {
   }
 }
 
+/** 서버 오류 응답에서 사람이 읽을 메시지를 뽑는다 (GlobalExceptionHandler 는 JSON 을 준다) */
+function parseMessage(body: string): string {
+  if (!body) return ''
+  try {
+    const j = JSON.parse(body)
+    return typeof j?.message === 'string' ? j.message : ''
+  } catch {
+    return body.slice(0, 200)
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers = new Headers(init.headers)
@@ -49,13 +65,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(0, '서버에 연결할 수 없습니다')
   }
 
-  if (res.status === 401) {
-    setSession(null) // 만료된 토큰은 버린다
-    throw new ApiError(401, '로그인이 필요합니다')
-  }
   if (!res.ok) {
-    const msg = await res.text().catch(() => '')
-    throw new ApiError(res.status, msg || `요청 실패 (${res.status})`)
+    // 서버가 사유를 보냈으면 그걸 쓴다. 로그인 실패(비밀번호 오류)까지
+    // '로그인이 필요합니다'로 덮으면 사용자가 뭘 틀렸는지 알 수 없다.
+    const body = await res.text().catch(() => '')
+    const serverMsg = parseMessage(body)
+
+    if (res.status === 401) {
+      // 이미 로그인된 세션이 만료된 경우에만 토큰을 버린다.
+      // 로그인 시도 자체가 실패한 것은 기존 세션과 무관하다.
+      if (token) setSession(null)
+      throw new ApiError(401, serverMsg || '로그인이 필요합니다')
+    }
+    throw new ApiError(res.status, serverMsg || `요청 실패 (${res.status})`)
   }
 
   if (res.status === 204) return undefined as T
@@ -72,6 +94,34 @@ export interface TokenResponse {
   handle: string
 }
 
+/** 이메일 + 비밀번호 가입 */
+export async function signup(body: {
+  email: string
+  password: string
+  handle: string
+  displayName?: string
+}) {
+  const res = await request<TokenResponse>('/api/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  setSession(res.accessToken, res.handle)
+  return res
+}
+
+export async function login(email: string, password: string) {
+  const res = await request<TokenResponse>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  })
+  setSession(res.accessToken, res.handle)
+  return res
+}
+
+/**
+ * 개발용 로그인 — 서버의 dev 프로파일에서만 존재한다.
+ * 운영 배포본에는 이 경로가 없으므로 실패하면 조용히 넘어가야 한다.
+ */
 export async function devLogin(handle: string, displayName?: string) {
   const res = await request<TokenResponse>('/api/auth/dev-login', {
     method: 'POST',
@@ -177,6 +227,7 @@ export interface MemoryDto {
   caption: string | null
   city: string | null
   scope: string
+  participants: { userId: string | null; displayName: string }[]
   media: {
     id: string
     mediaType: 'PHOTO' | 'VIDEO'
@@ -200,6 +251,8 @@ export function createMemory(
     regionKind?: 'REGION' | 'CITY' | null
     takenAt?: string
     capturedSource?: 'EXIF' | 'FILE'
+    /** 함께 간 사람 */
+    participants?: { userId: string | null; displayName: string }[]
   },
   files: File[],
   thumbs: (Blob | null)[] = [],

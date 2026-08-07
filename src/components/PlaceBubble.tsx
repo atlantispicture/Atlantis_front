@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { MemoryView } from '@/lib/memoryDb'
 import { SEASONS, SEASON_KEYS, seasonLabel, type Season } from '@/lib/season'
 import { useMemoryStore } from '@/store/useMemoryStore'
+import { useSocialStore } from '@/store/useSocialStore'
 import { useVisitStore } from '@/store/useVisitStore'
 import MemoryViewer from './MemoryViewer'
 
@@ -40,14 +41,21 @@ export default function PlaceBubble() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [viewIndex, setViewIndex] = useState<number | null>(null)
   const [expanded, setExpanded] = useState(false)
+  /** 올릴 사진에 함께 기록할 친구 (userId 목록) */
+  const [withIds, setWithIds] = useState<string[]>([])
+
+  const friends = useSocialStore((s) => s.friends)
+  const loadFriends = useSocialStore((s) => s.loadFriends)
 
   useEffect(() => {
     load()
-  }, [load])
+    loadFriends()
+  }, [load, loadFriends])
 
-  // 장소가 바뀌면 펼침 상태를 초기화한다
+  // 장소가 바뀌면 펼침·친구 선택을 초기화한다 (다른 장소에 딸려가지 않게)
   useEffect(() => {
     setExpanded(false)
+    setWithIds([])
   }, [selected?.code, selectedRegion?.code])
 
   const open = phase === 'country' && !!selected
@@ -74,6 +82,10 @@ export default function PlaceBubble() {
       countryCode: selected.code,
       regionCode: selectedRegion?.code ?? null,
       placeName: name,
+      // 지금 고른 친구들을 이 사진들에 함께 기록한다
+      participants: friends
+        .filter((f) => withIds.includes(f.userId))
+        .map((f) => ({ userId: f.userId, displayName: f.displayName })),
     })
     setExpanded(true)
   }
@@ -130,6 +142,39 @@ export default function PlaceBubble() {
             </button>
           )}
         </div>
+
+        {/* 함께 간 사람 — 친구가 있을 때만 보여준다 (없으면 자리만 차지한다) */}
+        {friends.length > 0 && (
+          <div className="bub__with">
+            <span className="bub__with-label">
+              함께
+              {withIds.length > 0 && <em> {withIds.length}명</em>}
+            </span>
+            <div className="bub__with-list">
+              {friends.map((f) => {
+                const on = withIds.includes(f.userId)
+                return (
+                  <button
+                    key={f.userId}
+                    className={`bub__friend ${on ? 'bub__friend--on' : ''}`}
+                    title={`@${f.handle}`}
+                    onClick={() =>
+                      setWithIds((p) =>
+                        on ? p.filter((x) => x !== f.userId) : [...p, f.userId],
+                      )
+                    }
+                  >
+                    {f.avatarUrl ? (
+                      <img src={f.avatarUrl} alt="" />
+                    ) : (
+                      <span>{f.displayName[0]}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 색 지정 — 계절 자동을 덮어쓴다 */}
         <div className="bub__colors">

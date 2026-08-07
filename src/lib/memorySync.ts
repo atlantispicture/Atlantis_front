@@ -34,6 +34,7 @@ export async function pushMemory(rec: MemoryRecord): Promise<string | null> {
           : null,
         takenAt: new Date(rec.capturedAt).toISOString(),
         capturedSource: rec.capturedSource === 'exif' ? 'EXIF' : 'FILE',
+        participants: rec.participants ?? [],
       },
       [new File([rec.file], rec.fileName, { type: rec.mime })],
       [rec.thumb],
@@ -49,8 +50,7 @@ async function fetchAsUrl(path: string): Promise<string | null> {
   const token = api.getToken()
   if (!token) return null
   try {
-    const base = import.meta.env.VITE_API_BASE ?? 'http://localhost:8082'
-    const res = await fetch(`${base}${path}`, {
+    const res = await fetch(`${api.API_BASE}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) return null
@@ -72,6 +72,7 @@ export interface PulledMemory {
   capturedSource: 'exif' | 'file'
   season: Season
   createdAt: number
+  participants: { userId: string | null; displayName: string }[]
   thumbUrl: string | null
   fileUrl: string
   /** 서버에서 온 항목 — 로컬 삭제와 구분한다 */
@@ -112,6 +113,7 @@ export async function pullMemories(): Promise<PulledMemory[]> {
       capturedSource: m.capturedSource === 'EXIF' ? 'exif' : 'file',
       season: (m.season && SEASON_MAP[m.season]) || seasonOfMonth(new Date(takenAt).getMonth() + 1),
       createdAt: takenAt,
+      participants: m.participants ?? [],
       thumbUrl,
       // 원본은 실제로 열 때 받는다 (아래 loadOriginal)
       fileUrl: media.url,

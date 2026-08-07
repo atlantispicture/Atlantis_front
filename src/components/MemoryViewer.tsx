@@ -169,6 +169,11 @@ export default function MemoryViewer({
                 촬영일 추정
               </span>
             )}
+            {item.participants && item.participants.length > 0 && (
+              <span className="viewer__with">
+                함께 {item.participants.map((p) => p.displayName).join(', ')}
+              </span>
+            )}
           </span>
         </div>
 
